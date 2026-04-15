@@ -1,0 +1,28 @@
+```gitignore
+# MATLAB
+*.asv
+*.m~
+*.mlx.autosave
+
+# Data / output
+*.mat
+*.fig
+*.png
+*.jpg
+*.jpeg
+*.pdf
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# MATLAB project / cache
+resources/
+slprj/
+simulink_cache/
+codegen/
+
+# Temporary files
+*.log
+*.tmp
+```
