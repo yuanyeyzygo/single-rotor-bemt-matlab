@@ -1,12 +1,12 @@
-# single-rotor-bemt-matlab
+# Single-Rotor BEMT MATLAB Demo
 
-A self-contained MATLAB demo for single-rotor blade element momentum theory (BEMT) trim analysis with optional flap dynamics and multiple blade-definition options.
+A self-contained MATLAB demo for single-rotor blade element momentum theory (BEMT) trim analysis with optional flap dynamics and configurable blade aerodynamic / geometric definitions.
 
 This repository provides a compact single-file implementation for:
 
 - single-rotor force and moment calculation
 - trim iteration for flap states and induced velocity
-- linear airfoil model
+- linear airfoil modelling
 - optional C81 `.txt` airfoil lookup
 - linear or lookup-based chord definition
 - linear or lookup-based pretwist definition
@@ -14,28 +14,35 @@ This repository provides a compact single-file implementation for:
 ## Features
 
 - Self-contained MATLAB implementation in one `.m` file
-- Explicit model selection:
+- Explicit model selection in the rotor definition
+- Supports:
   - `rotor.airfoil_model = 'linear'` or `'c81txt'`
   - `rotor.chord_model = 'linear'` or `'lookup'`
   - `rotor.pretwist_model = 'linear'` or `'lookup'`
-- Clear failure behaviour:
-  - if lookup files are selected but missing, the code stops with an error
+- Clear error behaviour:
+  - if lookup or C81 input files are selected but missing, the code stops with an error
 - Computes:
   - rotor forces and moments in body axes
-  - power
   - induced velocity
-  - flap angle/rate histories over one revolution
+  - power
+  - flap angle and flap rate histories over one revolution
 
-## File
+## Repository contents
 
 - `Rotor_model.m` – complete demo and all helper functions in a single MATLAB file
+- `chord_interp.mat` – optional nonlinear chord lookup file
+- `pretwist_interp.mat` – optional nonlinear pretwist lookup file
+- optional C81 airfoil text tables such as:
+  - `CS1_cl.txt`, `CS1_cd.txt`
+  - `CS2_cl.txt`, `CS2_cd.txt`
+  - etc.
 
 ## Requirements
 
 - MATLAB
-- `griddedInterpolant` support for C81 table interpolation
+- `griddedInterpolant` support for table interpolation
 
-No additional toolbox is intentionally required beyond standard MATLAB functionality used in this script.
+No additional toolbox is intentionally required beyond the standard MATLAB functionality used in the script.
 
 ## Quick start
 
@@ -51,46 +58,67 @@ The current default example uses:
 - linear chord model
 - linear pretwist model
 
-So it should run directly without external lookup files.
+So the script should run directly without any external lookup files.
 
 ## Current default example
 
-The script defines:
+The script currently defines:
 
-- a single rotor with:
-  - `R = 1.4 m`
-  - `Nb = 4`
-  - `omega = 90 rad/s`
-- zero body velocity and angular motion
-- collective pitch:
-  - `theta0_deg = 15`
+- rotor radius: `R = 1.4 m`
+- number of blades: `Nb = 4`
+- rotational speed: `omega = 90 rad/s`
+- air density: `rho = 1.225 kg/m^3`
+- collective pitch: `theta0_deg = 15`
 
-The script then solves for:
+The body state is initially set to zero velocity, zero angular velocity, zero linear acceleration, and zero angular acceleration.
 
-- initial flap states
+The solver then trims for:
+
+- initial flap angles
+- initial flap rates
 - induced velocity
+
+and returns:
+
 - forces and moments
 - power
+- convergence information
 
-## Optional input models
+## Model selection
 
-### 1. Airfoil model
+The script uses explicit model selection:
 
-Two options are supported:
+```matlab
+rotor.airfoil_model = 'linear';
+rotor.chord_model = 'linear';
+rotor.pretwist_model = 'linear';
+```
 
-#### Linear model
+Available options are described below.
+
+## Airfoil model
+
+Two airfoil options are supported.
+
+### 1. Linear airfoil model
+
 Use:
+
 ```matlab
 rotor.airfoil_model = 'linear';
 ```
 
-#### C81 text tables
+This uses a simple linear lift and quadratic drag model defined in the script.
+
+### 2. C81 text-table airfoil model
+
 Use:
+
 ```matlab
 rotor.airfoil_model = 'c81txt';
 ```
 
-Then provide files such as:
+This requires C81-style text files, for example:
 
 - `CS1_cl.txt`
 - `CS1_cd.txt`
@@ -98,12 +126,12 @@ Then provide files such as:
 - `CS2_cd.txt`
 - etc.
 
-The parser expects the following format:
+The parser expects the following structure:
 
 - first row: Mach grid
 - each following row: angle of attack followed by aerodynamic coefficients at each Mach number
 
-Example:
+Example format:
 
 ```text
 0.0 0.1 0.2 0.3
@@ -114,16 +142,34 @@ Example:
 10  0.90 0.91 0.92 0.93
 ```
 
-### 2. Chord model
+The code checks for:
 
-Two options are supported:
+- missing files
+- invalid row lengths
+- non-finite values
+- duplicated Mach values
+- duplicated angle-of-attack values
 
-#### Linear model
+before building the interpolation object.
+
+## Chord model
+
+Two chord options are supported.
+
+### 1. Linear chord model
+
+Use:
+
 ```matlab
 rotor.chord_model = 'linear';
 ```
 
-#### Lookup model
+This uses the root and tip chord values defined in the script and interpolates linearly along the span.
+
+### 2. Lookup chord model
+
+Use:
+
 ```matlab
 rotor.chord_model = 'lookup';
 ```
@@ -132,18 +178,46 @@ This requires:
 
 - `chord_interp.mat`
 
-The chosen variable inside the `.mat` file must be callable with one input `x`, where `x` is the nondimensional radial location.
+In the current repository setup, `chord_interp.mat` contains a MATLAB `griddedInterpolant` object named:
 
-### 3. Pretwist model
+- `F`
 
-Two options are supported:
+The code loads this object and evaluates it using a single input `x`, where:
 
-#### Linear model
+- `x` is the nondimensional radial location along the blade span
+
+That is, the lookup variable is expected to behave like:
+
+```matlab
+value = F(x)
+```
+
+The chord lookup unit is specified in the script as:
+
+```matlab
+rotor.chord.lookup_unit = 'c_over_R';
+```
+
+This is interpreted case-insensitively by the code.
+
+## Pretwist model
+
+Two pretwist options are supported.
+
+### 1. Linear pretwist model
+
+Use:
+
 ```matlab
 rotor.pretwist_model = 'linear';
 ```
 
-#### Lookup model
+This uses the root and tip pretwist values defined in the script and interpolates linearly along the span.
+
+### 2. Lookup pretwist model
+
+Use:
+
 ```matlab
 rotor.pretwist_model = 'lookup';
 ```
@@ -152,20 +226,53 @@ This requires:
 
 - `pretwist_interp.mat`
 
-The chosen variable inside the `.mat` file must be callable with one input `x`, where `x` is the nondimensional radial location.
+In the current repository setup, `pretwist_interp.mat` contains a MATLAB `griddedInterpolant` object named:
 
-## Notes on spanwise sectioning
+- `pre_twist`
 
-The script includes:
+The code loads this object and evaluates it using a single input `x`, where:
+
+- `x` is the nondimensional radial location along the blade span
+
+That is, the lookup variable is expected to behave like:
+
+```matlab
+value = pre_twist(x)
+```
+
+The returned value is interpreted as blade pretwist in degrees.
+
+## Spanwise sectioning
+
+The script includes spanwise section definitions through:
 
 ```matlab
 rotor.section_r_end = [1 1 1 1 1 1];
 rotor.section_airfoil_id = [1 1 1 1 1 1];
 ```
 
-This is kept exactly as in the current original demo so that the public version stays consistent with the author’s working file.
+These are kept as they appear in the current working version of the demo.
 
-Users can modify these arrays if they want different airfoil sections across the blade span.
+Users can modify these arrays if they want different airfoil sections to be applied over different radial ranges.
+
+## Output
+
+After running the script, MATLAB prints:
+
+- convergence flag
+- iteration count
+- residual norm
+- power
+- induced velocity
+- forces and moments
+- initial flap angles
+- initial flap rates
+
+## Notes on structure
+
+The entire implementation is intentionally kept in a single MATLAB file in this version in order to preserve the original working structure with minimal modification.
+
+A future version may separate the helper functions into individual files for easier maintenance and extension.
 
 ## Important limitations
 
@@ -179,29 +286,24 @@ Current limitations include:
 - simplified induced inflow treatment using a single induced velocity unknown
 - no dynamic inflow model
 - no free-wake model
-- no unsteady dynamic stall model
-- no full multi-rotor interaction model
+- no dynamic stall model
+- no full multi-rotor aerodynamic interaction model
 
-Therefore, users should treat this code as:
+Therefore, this code should be treated as:
 
 - a research demo
 - a teaching / development baseline
-- a starting point for further modelling
-
-## Why the code is kept in one file
-
-The code is intentionally kept in a single `.m` file in this repository version to preserve the original implementation with minimal modification.
-
-Future versions may separate the helper functions into individual files for improved maintainability.
+- a starting point for further modelling work
 
 ## License
 
 This repository is released under the MIT License.
 
-## Citation
+## Citation and acknowledgement
 
 If this repository is useful in academic work, please cite the repository and acknowledge the original author.
 
 ## Author
 
-Ye Yuan
+Ye Yuan  
+University of Glasgow
