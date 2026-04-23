@@ -1,309 +1,396 @@
-# Single-Rotor BEMT MATLAB Demo
+# Single-Rotor BEMT MATLAB / Simulink Demo
 
-A self-contained MATLAB demo for single-rotor blade element momentum theory (BEMT) trim analysis with optional flap dynamics and configurable blade aerodynamic / geometric definitions.
+A compact research demo for single-rotor blade element momentum theory (BEMT) analysis with flap-trim solving, configurable aerodynamic and geometric models, and a Simulink-compatible preprocessing workflow.
 
-This repository provides a compact single-file implementation for:
+This repository contains two complementary paths:
 
-- single-rotor force and moment calculation
-- trim iteration for flap states and induced velocity
-- linear airfoil modelling
-- optional C81 `.txt` airfoil lookup
-- linear or lookup-based chord definition
-- linear or lookup-based pretwist definition
+1. Standalone MATLAB workflow  
+   A single-file MATLAB implementation for direct rotor force and moment calculation and trim solving.
 
-## Features
+2. Preprocessed Simulink workflow  
+   An offline preprocessing script that converts airfoil, chord, and pretwist inputs into numeric arrays suitable for a code-generation-friendly runtime implementation in Simulink.
 
-- Self-contained MATLAB implementation in one `.m` file
-- Explicit model selection in the rotor definition
-- Supports:
-  - `rotor.airfoil_model = 'linear'` or `'c81txt'`
-  - `rotor.chord_model = 'linear'` or `'lookup'`
-  - `rotor.pretwist_model = 'linear'` or `'lookup'`
-- Clear error behaviour:
-  - if lookup or C81 input files are selected but missing, the code stops with an error
-- Computes:
-  - rotor forces and moments in body axes
-  - induced velocity
-  - power
-  - flap angle and flap rate histories over one revolution
+The repository is intended as a baseline research and development model, not a high-fidelity production solver.
 
-## Repository contents
+--------------------------------------------------
+Repository structure
+--------------------------------------------------
 
-- `Rotor_model.m` – complete demo and all helper functions in a single MATLAB file
-- `chord_interp.mat` – optional nonlinear chord lookup file
-- `pretwist_interp.mat` – optional nonlinear pretwist lookup file
-- optional C81 airfoil text tables such as:
-  - `CS1_cl.txt`, `CS1_cd.txt`
-  - `CS2_cl.txt`, `CS2_cd.txt`
-  - etc.
+.
+├── Rotor_model.m
+├── Data_input.m
+├── Simulink_one_rotor.slx
+├── chord_interp.mat              (optional, for lookup chord mode)
+├── pretwist_interp.mat           (optional, for lookup pretwist mode)
+├── CS1_cl.txt ... CS6_cl.txt     (optional, for C81 lift tables)
+├── CS1_cd.txt ... CS6_cd.txt     (optional, for C81 drag tables)
+└── README.md
 
-## Requirements
+Main files
 
-- MATLAB
-- `griddedInterpolant` support for table interpolation
+Rotor_model.m
+Standalone MATLAB script containing:
+- rotor definition
+- operating-state definition
+- model selection
+- flap / induced-velocity trim iteration
+- force / moment calculation
+- helper functions for:
+  - C81 table parsing
+  - chord evaluation
+  - pretwist evaluation
+  - airfoil evaluation
 
-No additional toolbox is intentionally required beyond the standard MATLAB functionality used in the script.
+This file is self-contained and is the easiest entry point if you want to inspect or modify the aerodynamic model directly.
 
-## Quick start
+Data_input.m
+Offline preprocessing script for the Simulink workflow.
 
-Open MATLAB in the repository folder and run:
+This script:
+- reads C81 airfoil text tables
+- samples or remaps lookup data for chord and pretwist
+- assembles a numeric-only rotor structure
+- writes the processed data into rotor.mat
 
-```matlab
-run('Rotor_model.m')
-```
+This is useful when the runtime model should avoid unsupported features such as runtime file parsing, function handles, or interpolant objects.
 
-The current default example uses:
+Simulink_one_rotor.slx
+Simulink implementation of the one-rotor model using preprocessed numeric data.
 
-- linear airfoil model
-- linear chord model
-- linear pretwist model
+This model is intended for:
+- integration into larger Simulink studies
+- code-generation-friendly testing
+- future control and system-level simulation work
 
-So the script should run directly without any external lookup files.
+--------------------------------------------------
+What the model does
+--------------------------------------------------
 
-## Current default example
+The model computes single-rotor aerodynamic loads while solving for a trimmed periodic flap state.
 
-The script currently defines:
+More specifically, it can compute:
+- rotor forces in body axes
+- rotor moments in body axes
+- rotor torque and power
+- induced velocity
+- flap-angle histories over one revolution
+- flap-rate histories over one revolution
+- angle-of-attack histories over one revolution
 
-- rotor radius: `R = 1.4 m`
-- number of blades: `Nb = 4`
-- rotational speed: `omega = 90 rad/s`
-- air density: `rho = 1.225 kg/m^3`
-- collective pitch: `theta0_deg = 15`
-
-The body state is initially set to zero velocity, zero angular velocity, zero linear acceleration, and zero angular acceleration.
-
-The solver then trims for:
-
+The trim procedure solves for:
 - initial flap angles
 - initial flap rates
-- induced velocity
+- a single induced-velocity unknown
 
-and returns:
+so that the blade state becomes periodic over one rotor revolution and the scalar inflow balance is satisfied.
 
-- forces and moments
-- power
-- convergence information
+--------------------------------------------------
+Modelling options
+--------------------------------------------------
 
-## Model selection
+1. Airfoil model
 
-The script uses explicit model selection:
+Two airfoil representations are available.
 
-```matlab
-rotor.airfoil_model = 'linear';
-rotor.chord_model = 'linear';
-rotor.pretwist_model = 'linear';
-```
+Linear airfoil model
+A simple low-order model defined by:
+- lift-curve slope
+- zero-lift angle
+- parasitic drag coefficient
+- quadratic drag factor
 
-Available options are described below.
+This is the simplest mode and is useful for testing, debugging, and baseline comparisons.
 
-## Airfoil model
+C81 text-table lookup
+A table-based airfoil option using text files such as:
+- CS1_cl.txt, CS1_cd.txt
+- CS2_cl.txt, CS2_cd.txt
+- ...
+- CS6_cl.txt, CS6_cd.txt
 
-Two airfoil options are supported.
+Expected format:
 
-### 1. Linear airfoil model
-
-Use:
-
-```matlab
-rotor.airfoil_model = 'linear';
-```
-
-This uses a simple linear lift and quadratic drag model defined in the script.
-
-### 2. C81 text-table airfoil model
-
-Use:
-
-```matlab
-rotor.airfoil_model = 'c81txt';
-```
-
-This requires C81-style text files, for example:
-
-- `CS1_cl.txt`
-- `CS1_cd.txt`
-- `CS2_cl.txt`
-- `CS2_cd.txt`
-- etc.
-
-The parser expects the following structure:
-
-- first row: Mach grid
-- each following row: angle of attack followed by aerodynamic coefficients at each Mach number
-
-Example format:
-
-```text
 0.0 0.1 0.2 0.3
 -10 0.10 0.11 0.12 0.13
 -5  0.30 0.31 0.32 0.33
 0   0.50 0.51 0.52 0.53
 5   0.70 0.71 0.72 0.73
 10  0.90 0.91 0.92 0.93
-```
 
-The code checks for:
+where:
+- the first row is the Mach grid
+- each following row begins with angle of attack
+- the remaining entries are the aerodynamic coefficients at each Mach number
 
+The code includes checks for:
 - missing files
 - invalid row lengths
+- duplicate angle-of-attack values
+- duplicate Mach values
 - non-finite values
-- duplicated Mach values
-- duplicated angle-of-attack values
 
-before building the interpolation object.
+before constructing the lookup representation.
 
-## Chord model
+2. Chord model
 
-Two chord options are supported.
+Two chord representations are available.
 
-### 1. Linear chord model
+Linear chord model
+Chord is interpolated linearly from root to tip using user-defined values.
 
-Use:
+Lookup chord model
+Chord is loaded from:
+- chord_interp.mat
 
-```matlab
-rotor.chord_model = 'linear';
-```
+Expected variable:
+- F
 
-This uses the root and tip chord values defined in the script and interpolates linearly along the span.
+The lookup should behave like:
 
-### 2. Lookup chord model
-
-Use:
-
-```matlab
-rotor.chord_model = 'lookup';
-```
-
-This requires:
-
-- `chord_interp.mat`
-
-In the current repository setup, `chord_interp.mat` contains a MATLAB `griddedInterpolant` object named:
-
-- `F`
-
-The code loads this object and evaluates it using a single input `x`, where:
-
-- `x` is the nondimensional radial location along the blade span
-
-That is, the lookup variable is expected to behave like:
-
-```matlab
 value = F(x)
-```
 
-The chord lookup unit is specified in the script as:
+where x is the nondimensional radial position along the blade span.
 
-```matlab
-rotor.chord.lookup_unit = 'c_over_R';
-```
+Depending on the chosen unit convention, the chord data may be interpreted as either:
+- physical chord in metres
+- nondimensional c/R
 
-This is interpreted case-insensitively by the code.
+3. Pretwist model
 
-## Pretwist model
+Two pretwist representations are available.
 
-Two pretwist options are supported.
+Linear pretwist model
+Pretwist is interpolated linearly from root to tip in degrees.
 
-### 1. Linear pretwist model
+Lookup pretwist model
+Pretwist is loaded from:
+- pretwist_interp.mat
 
-Use:
+Expected variable:
+- pre_twist
 
-```matlab
-rotor.pretwist_model = 'linear';
-```
+The lookup should behave like:
 
-This uses the root and tip pretwist values defined in the script and interpolates linearly along the span.
-
-### 2. Lookup pretwist model
-
-Use:
-
-```matlab
-rotor.pretwist_model = 'lookup';
-```
-
-This requires:
-
-- `pretwist_interp.mat`
-
-In the current repository setup, `pretwist_interp.mat` contains a MATLAB `griddedInterpolant` object named:
-
-- `pre_twist`
-
-The code loads this object and evaluates it using a single input `x`, where:
-
-- `x` is the nondimensional radial location along the blade span
-
-That is, the lookup variable is expected to behave like:
-
-```matlab
 value = pre_twist(x)
-```
 
-The returned value is interpreted as blade pretwist in degrees.
+where x is the nondimensional radial position.
 
-## Spanwise sectioning
+The returned value is interpreted as pretwist angle in degrees.
 
-The script includes spanwise section definitions through:
+--------------------------------------------------
+Spanwise sectioning
+--------------------------------------------------
 
-```matlab
-rotor.section_r_end = [1 1 1 1 1 1];
-rotor.section_airfoil_id = [1 1 1 1 1 1];
-```
+The blade can be divided into multiple radial sections using:
+- rotor.section_r_end
+- rotor.section_airfoil_id
 
-These are kept as they appear in the current working version of the demo.
+This allows different airfoil definitions to be assigned to different parts of the blade span.
 
-Users can modify these arrays if they want different airfoil sections to be applied over different radial ranges.
+For example, a root section, mid-span section, and tip section may each use different airfoil data if needed.
 
-## Output
+--------------------------------------------------
+Standalone MATLAB workflow
+--------------------------------------------------
 
-After running the script, MATLAB prints:
+The standalone solver is the simplest way to run the model.
 
+Quick start
+
+Open MATLAB in the repository folder and run:
+
+run('Rotor_model.m')
+
+The script defines:
+- the rotor geometry and physical parameters
+- the vehicle or hub state
+- the control input
+- the solver settings
+- the aerodynamic and geometric model selections
+
+It then runs the trim solve and prints the main outputs to the MATLAB console.
+
+Typical outputs
+
+After execution, the standalone script prints:
 - convergence flag
-- iteration count
+- number of iterations
 - residual norm
 - power
 - induced velocity
-- forces and moments
+- body-axis force and moment vector
 - initial flap angles
 - initial flap rates
 
-## Notes on structure
+--------------------------------------------------
+Simulink workflow
+--------------------------------------------------
 
-The entire implementation is intentionally kept in a single MATLAB file in this version in order to preserve the original working structure with minimal modification.
+The Simulink path is intended for cases where you want the model to operate with preprocessed numeric data rather than runtime file parsing.
 
-A future version may separate the helper functions into individual files for easier maintenance and extension.
+Step 1: preprocess the lookup data
 
-## Important limitations
+Run:
 
-This repository is intended as a compact demo / baseline implementation.
+run('Data_input.m')
 
-It is **not** a high-fidelity validated production solver.
+This script prepares numeric rotor data and writes:
+
+rotor.mat
+
+Step 2: open and run the Simulink model
+
+open_system('Simulink_one_rotor.slx')
+
+Then run the model from Simulink as usual.
+
+Why this path exists
+
+This workflow is useful when you want to avoid runtime features that are inconvenient for code generation or embedded-style execution, such as:
+- runtime text parsing
+- griddedInterpolant objects at runtime
+- function handles at runtime
+- dynamic lookup construction inside the execution loop
+
+Instead, those data are prepared offline and passed to the runtime solver in numeric form.
+
+--------------------------------------------------
+Important consistency note
+--------------------------------------------------
+
+This repository contains two related but different workflows:
+- the standalone MATLAB script uses explicit string-based model selection
+- the preprocessing and Simulink path uses numeric mode codes and preprocessed arrays
+
+If you want to compare the two workflows directly, make sure the following are aligned in both paths:
+- airfoil mode
+- chord mode
+- chord unit convention
+- pretwist mode
+- rotor operating state
+- control input
+- lookup files used
+- rotor geometry and physical parameters
+
+If these are not aligned, the two workflows can produce different results even though they represent the same overall rotor model structure.
+
+--------------------------------------------------
+Default example parameters
+--------------------------------------------------
+
+A representative example setup in this repository uses values such as:
+- rotor radius: R = 1.4 m
+- number of blades: Nb = 4
+- rotational speed: omega = 90 rad/s
+- air density: rho = 1.225 kg/m^3
+- root cutout: 0.1R
+- spanwise blade elements: 10
+- azimuthal steps per revolution: 72
+- collective pitch input: theta0_deg = 15
+
+These values can be edited directly in the scripts.
+
+--------------------------------------------------
+Solver description
+--------------------------------------------------
+
+The model uses a blade-element-based force integration over:
+- spanwise blade elements
+- azimuthal stations over one rotor revolution
+
+The flap and inflow trim is solved iteratively.
+The unknown vector includes:
+- blade initial flap angles
+- blade initial flap rates
+- one induced velocity term
+
+A finite-difference Jacobian is used together with a damped Newton-style update to reduce the trim residual.
+
+This makes the model compact and easy to inspect, while still retaining the key coupling between:
+- blade kinematics
+- rotor inflow
+- aerodynamic loading
+- flap response
+
+--------------------------------------------------
+Intended use cases
+--------------------------------------------------
+
+This repository is suitable for:
+- aerodynamic model prototyping
+- rotorcraft teaching demonstrations
+- debugging of BEMT formulations
+- comparison between standalone MATLAB and Simulink implementations
+- testing of flap-trim solvers
+- building a baseline model before moving to more advanced approaches
+
+Examples of downstream extensions include:
+- dynamic inflow models
+- free-wake models
+- multi-rotor interaction models
+- controller integration
+- real-time or reduced-order implementations
+- parameter-identification studies
+
+--------------------------------------------------
+Limitations
+--------------------------------------------------
+
+This is a compact research demo and has several important limitations.
 
 Current limitations include:
-
-- single-rotor demo only
-- simplified induced inflow treatment using a single induced velocity unknown
+- single-rotor model only
+- one induced-velocity unknown
 - no dynamic inflow model
 - no free-wake model
 - no dynamic stall model
-- no full multi-rotor aerodynamic interaction model
+- no rotor-rotor aerodynamic interaction
+- no comprehensive validation package included in the repository
+- no guarantee of production-level robustness across all operating conditions
 
-Therefore, this code should be treated as:
+Accordingly, the repository should be treated as:
+- a baseline implementation
+- a research and teaching tool
+- a starting point for further development
 
-- a research demo
-- a teaching / development baseline
-- a starting point for further modelling work
+rather than a final high-fidelity solver.
 
-## License
+--------------------------------------------------
+Suggested workflow for users
+--------------------------------------------------
+
+If you are new to the repository, the recommended path is:
+1. run the standalone MATLAB script first
+2. verify that the basic solver converges
+3. switch between linear and lookup modes
+4. run the preprocessing script
+5. compare the Simulink and standalone results
+6. modify the rotor geometry and operating condition as needed
+
+This makes it easier to debug the model before embedding it in a larger Simulink environment.
+
+--------------------------------------------------
+License
+--------------------------------------------------
 
 This repository is released under the MIT License.
 
-## Citation and acknowledgement
+--------------------------------------------------
+Citation and acknowledgement
+--------------------------------------------------
 
-If this repository is useful in academic work, please cite the repository and acknowledge the original author.
+If this repository is useful in academic or engineering work, please cite the repository appropriately and acknowledge the original author.
 
-## Author
+If you adapt or extend the model, it is also helpful to indicate:
+- what has been changed
+- which workflow was used
+- which airfoil, chord, and pretwist data were employed
 
-Ye Yuan  
+to improve reproducibility.
+
+--------------------------------------------------
+Author
+--------------------------------------------------
+
+Ye Yuan
 University of Glasgow
