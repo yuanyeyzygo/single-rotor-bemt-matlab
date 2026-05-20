@@ -359,7 +359,8 @@ function [forces, beta_hist, dbeta_hist, power, alpha_hist, flow_state] = ...
                         rotor.rotational_direction*dL*sin(phi_new);
 
                 M_torque = M_torque + D_be*r;
-
+                blade_force_b = [0; D_be; T_be];
+                M_hinge_b = cross([r;0;0], blade_force_b);
                 blade_force = [0; D_be; T_be];
                 blade_force = T_flap_inv * blade_force;
                 blade_force = T_az_inv * blade_force;
@@ -367,7 +368,7 @@ function [forces, beta_hist, dbeta_hist, power, alpha_hist, flow_state] = ...
                 Tb_new = Tb_new + blade_force(3);
                 Hb_new = Hb_new + blade_force(1);
                 Sb_new = Sb_new + blade_force(2);
-                M_A = M_A + blade_force(3)*r;
+                M_A = M_A + M_hinge_b(2);;
             end
 
             Tb_average = Tb_average + Tb_new / n_az;
@@ -380,9 +381,13 @@ function [forces, beta_hist, dbeta_hist, power, alpha_hist, flow_state] = ...
             M_cor = -2 * I_beta * (ppp*omega*cos(Az) - qqq*omega*sin(Az));
             M_ba = I_beta * (aap*sin(Az) + aaq*cos(Az));
             M_bl = 1.5 * (aaw - uuu*qqq + ppp*vvv);
+            M_R_blade = [0; -k_beta*beta_vals(Az1,k); 0];
+            M_hub_blade = -M_R_blade;
+            M_hub_disc = T_az_inv * T_flap_inv * M_hub_blade;
 
-            M_average = M_average + M_R*cos(Az)/n_az;
-            L_average = L_average + M_R*sin(Az)/n_az;
+            
+            L_average = L_average + M_hub_disc(1)/Steps;
+            M_average = M_average + M_hub_disc(2)/Steps;
 
             beta_2dot = (M_A + M_CF + M_R + M_cor + M_ba + M_bl) / I_beta;
             beta_dot = beta_dot + beta_2dot * dt;
